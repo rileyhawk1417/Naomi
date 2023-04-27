@@ -437,32 +437,25 @@ setup_wizard() {
     echo '      case $key in' >> ~/.config/naomi/Naomi.sh
     echo '        Y)' >> ~/.config/naomi/Naomi.sh
     echo '          printf "${B_M}$key ${B_W}- Forcing Update${NL}"' >> ~/.config/naomi/Naomi.sh
-    echo '          mv ~/Naomi ~/Naomi-Temp' >> ~/.config/naomi/Naomi.sh
-    echo '          cd ~' >> ~/.config/naomi/Naomi.sh
     echo "          if [ \"\$(jq '.use_release' ~/.config/naomi/configs/.naomi_options.json)\" = '\"nightly\"' ]; then" >> ~/.config/naomi/Naomi.sh
     echo '            printf "${B_M}$key ${B_W}- Forcing Update${NL}"' >> ~/.config/naomi/Naomi.sh
+    echo '            cd ~' >> ~/.config/naomi/Naomi.sh
     echo '            mv ~/Naomi ~/Naomi-Temp' >> ~/.config/naomi/Naomi.sh
-    echo '            cd ~' >> ~/.config/naomi/Naomi.sh
     echo "            git clone \$gitURL.git -b naomi-dev Naomi" >> ~/.config/naomi/Naomi.sh
-    echo '            cd Naomi' >> ~/.config/naomi/Naomi.sh
     echo "            echo '{\"use_release\":\"nightly\", \"branch\":\"naomi-dev\", \"version\":\"Naomi-\$version.\$(git rev-parse --short HEAD)\", \"date\":\"\$theDateRightNow\", \"auto_update\":\"true\"}' > ~/.config/naomi/configs/.naomi_options.json" >> ~/.config/naomi/Naomi.sh
-    echo '            cd ~' >> ~/.config/naomi/Naomi.sh
     echo '            break' >> ~/.config/naomi/Naomi.sh
     echo "          elif [ \"\$(jq '.use_release' ~/.config/naomi/configs/.naomi_options.json)\" = '\"milestone\"' ]; then" >> ~/.config/naomi/Naomi.sh
     echo '            printf "${B_M}$key ${B_W}- Forcing Update${NL}"' >> ~/.config/naomi/Naomi.sh
+    echo '            cd ~' >> ~/.config/naomi/Naomi.sh
     echo '            mv ~/Naomi ~/Naomi-Temp' >> ~/.config/naomi/Naomi.sh
-    echo '            cd ~' >> ~/.config/naomi/Naomi.sh
     echo "            git clone \$gitURL.git -b naomi-dev Naomi" >> ~/.config/naomi/Naomi.sh
-    echo '            cd Naomi' >> ~/.config/naomi/Naomi.sh
     echo "            echo '{\"use_release\":\"milestone\", \"branch\":\"naomi-dev\", \"version\":\"Naomi-\$version.\$(git rev-parse --short HEAD)\", \"date\":\"\$theDateRightNow\", \"auto_update\":\"true\"}' > ~/.config/naomi/configs/.naomi_options.json" >> ~/.config/naomi/Naomi.sh
-    echo '            cd ~' >> ~/.config/naomi/Naomi.sh
     echo '            break' >> ~/.config/naomi/Naomi.sh
     echo "          elif [ \"\$(jq '.use_release' ~/.config/naomi/configs/.naomi_options.json)\" = '\"stable\"' ]; then" >> ~/.config/naomi/Naomi.sh
     echo '            printf "${B_M}$key ${B_W}- Forcing Update${NL}"' >> ~/.config/naomi/Naomi.sh
-    echo '            mv ~/Naomi ~/Naomi-Temp' >> ~/.config/naomi/Naomi.sh
     echo '            cd ~' >> ~/.config/naomi/Naomi.sh
+    echo '            mv ~/Naomi ~/Naomi-Temp' >> ~/.config/naomi/Naomi.sh
     echo "            git clone \$gitURL.git -b master Naomi" >> ~/.config/naomi/Naomi.sh
-    echo '            cd Naomi' >> ~/.config/naomi/Naomi.sh
     echo "            echo '{\"use_release\":\"stable\", \"branch\":\"master\", \"version\":\"Naomi-\$version.\$(git rev-parse --short HEAD)\", \"date\":\"\$theDateRightNow\", \"auto_update\":\"false\"}' > ~/.config/naomi/configs/.naomi_options.json" >> ~/.config/naomi/Naomi.sh
     echo '            cd ~' >> ~/.config/naomi/Naomi.sh
     echo '          fi' >> ~/.config/naomi/Naomi.sh
@@ -491,199 +484,6 @@ setup_wizard() {
     find ~/Naomi -maxdepth 1 -iname '*.sh' -type f -exec chmod a+x {} \;
     find ~/.config/naomi -maxdepth 1 -iname '*.sh' -type f -exec chmod a+x {} \;
     find ~/Naomi/installers -maxdepth 1 -iname '*.sh' -type f -exec chmod a+x {} \;
-
-    echo
-    printf "${B_W}=========================================================================${NL}"
-    printf "${B_W}PLUGIN SETUP${NL}"
-    printf "${B_W}Now we'll tackle the default plugin options available for Text-to-Speech, Speech-to-Text, and more.${NL}"
-    echo
-    sleep 3
-    echo
-
-    # Build Phonetisaurus
-    # Building and installing openfst
-    echo
-    printf "${B_G}Building and installing openfst...${B_W}${NL}"
-    cd ~/.config/naomi/sources
-
-    if [ ! -f "openfst-1.6.9.tar.gz" ]; then
-      wget http://www.openfst.org/twiki/pub/FST/FstDownload/openfst-1.6.9.tar.gz
-    fi
-    tar -zxvf openfst-1.6.9.tar.gz
-    cd openfst-1.6.9
-    autoreconf -i
-    ./configure --enable-static --enable-shared --enable-far --enable-lookahead-fsts --enable-const-fsts --enable-pdt --enable-ngram-fsts --enable-linear-fsts --prefix=/usr
-    make
-    if [ $REQUIRE_AUTH -eq 1 ]; then
-      SUDO_COMMAND "sudo make install"
-      if [ $? -ne 0 ]; then
-        echo $! >&2
-        exit 1
-      fi
-    else
-      printf "${B_W}${NL}"
-      sudo make install
-      if [ $? -ne 0 ]; then
-        echo $! >&2
-        exit 1
-      fi
-    fi
-
-    if [ -z "$(which fstinfo)" ]; then
-      printf "${ERROR} ${B_R}Notice:${B_W} openfst not installed${NL}" >&2
-      exit 1
-    fi
-
-    # Building and installing mitlm-0.4.2
-    echo
-    printf "${B_G}Installing & Building mitlm-0.4.2...${B_W}${NL}"
-    cd ~/.config/naomi/sources
-    if [ ! -d "mitlm" ]; then
-      git clone https://github.com/mitlm/mitlm.git
-      if [ $? -ne 0 ]; then
-        printf "${ERROR} ${B_R}Notice:${B_W} Error cloning mitlm${NL}"
-        exit 1
-      fi
-    fi
-    cd mitlm
-    ./autogen.sh
-    make
-    printf "${B_G}Installing mitlm${B_W}${NL}"
-    if [ $REQUIRE_AUTH -eq 1 ]; then
-      SUDO_COMMAND "sudo make install"
-      if [ $? -ne 0 ]; then
-        echo $! >&2
-        exit 1
-      fi
-    else
-      printf "${B_W}${NL}"
-      sudo make install
-      if [ $? -ne 0 ]; then
-        echo $! >&2
-        exit 1
-      fi
-    fi
-
-    # Building and installing CMUCLMTK
-    echo
-    printf "${B_G}Installing & Building cmuclmtk...${B_W}${NL}"
-    cd ~/.config/naomi/sources
-    svn co https://svn.code.sf.net/p/cmusphinx/code/trunk/cmuclmtk/
-    if [ $? -ne 0 ]; then
-      printf "${ERROR} ${B_R}Notice:${B_W} Error cloning cmuclmtk${NL}" >&2
-      exit 1
-    fi
-    cd cmuclmtk
-    ./autogen.sh
-    make
-    printf "${B_G}Installing CMUCLMTK${B_W}${NL}"
-    if [ $REQUIRE_AUTH -eq 1 ]; then
-      SUDO_COMMAND "sudo make install"
-    else
-      printf "${B_W}${NL}"
-      sudo make install
-    fi
-
-    printf "${B_G}Linking shared libraries${B_W}${NL}"
-    if [ $REQUIRE_AUTH -eq 1 ]; then
-      SUDO_COMMAND "sudo ldconfig"
-    else
-      printf "${B_W}${NL}"
-      sudo ldconfig
-    fi
-
-    # Building and installing phonetisaurus
-    echo
-    printf "${B_G}Installing & Building phonetisaurus...${B_W}${NL}"
-    cd ~/.config/naomi/sources
-    if [ ! -d "Phonetisaurus" ]; then
-      git clone https://github.com/AdolfVonKleist/Phonetisaurus.git
-        if [ $? -ne 0 ]; then
-          printf "${ERROR} ${B_R}Notice:${B_W} Error cloning Phonetisaurus${NL}" >&2
-          exit 1
-        fi
-    fi
-    cd Phonetisaurus
-    ./configure --enable-python
-    make
-    printf "${B_G}Installing Phonetisaurus${B_W}${NL}"
-    printf "${B_G}Linking shared libraries${B_W}${NL}"
-    if [ $REQUIRE_AUTH -eq 1 ]; then
-      SUDO_COMMAND "sudo make install"
-    else
-      printf "${B_W}${NL}"
-      sudo make install
-    fi
-
-    printf "[$(pwd)]\$ ${B_G}cd python${B_W}${NL}"
-    cd python
-    echo $(pwd)
-    cp -v ../.libs/Phonetisaurus.so ./
-    if [ $REQUIRE_AUTH -eq 1 ]; then
-      SUDO_COMMAND "sudo python setup.py install"
-    else
-      printf "${B_W}${NL}"
-      sudo python setup.py install
-    fi
-
-    if [ -z "$(which phonetisaurus-g2pfst)" ]; then
-      printf "${ERROR} ${B_R}Notice:${B_W} phonetisaurus-g2pfst does not exist${NL}" >&2
-      exit 1
-    fi
-
-    # Installing & Building sphinxbase
-    echo
-    printf "${B_G}Building and installing sphinxbase...${B_W}${NL}"
-    cd ~/.config/naomi/sources
-    if [ ! -d "pocketsphinx-python" ]; then
-      git clone --recursive https://github.com/bambocher/pocketsphinx-python.git
-      if [ $? -ne 0 ]; then
-        printf "${ERROR} ${B_R}Notice:${B_W} Error cloning pocketsphinx${NL}" >&2
-        exit 1
-      fi
-    fi
-    cd pocketsphinx-python/deps/sphinxbase
-    ./autogen.sh
-    make
-    if [ $REQUIRE_AUTH -eq 1 ]; then
-      SUDO_COMMAND "sudo make install"
-    else
-      printf "${B_W}${NL}"
-      sudo make install
-    fi
-
-    # Installing & Building pocketsphinx
-    echo
-    printf "${B_G}Building and installing pocketsphinx...${B_W}${NL}"
-    cd ~/.config/naomi/sources/pocketsphinx-python/deps/pocketsphinx
-    ./autogen.sh
-    make
-    if [ $REQUIRE_AUTH -eq 1 ]; then
-      SUDO_COMMAND "sudo make install"
-    else
-      printf "${B_W}${NL}"
-      sudo make install
-    fi
-
-    # Installing PocketSphinx Python module
-    echo
-    printf "${B_G}Installing PocketSphinx module...${B_W}${NL}"
-    cd ~/.config/naomi/sources/pocketsphinx-python
-    python setup.py install
-
-    cd $NAOMI_DIR
-    if [ -z "$(which text2wfreq)" ]; then
-      printf "${ERROR} ${B_R}Notice:${B_W} text2wfreq does not exist${NL}" >&2
-      exit 1
-    fi
-    if [ -z "$(which text2idngram)" ]; then
-      printf "${ERROR} ${B_R}Notice:${B_W} text2idngram does not exist${NL}" >&2
-      exit 1
-    fi
-    if [ -z "$(which idngram2lm)" ]; then
-      printf "${ERROR} ${B_R}Notice:${B_W} idngram2lm does not exist${NL}" >&2
-      exit 1
-    fi
 
     # Compiling Translations
     echo

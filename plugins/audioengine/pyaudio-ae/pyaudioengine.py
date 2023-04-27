@@ -22,6 +22,21 @@ def bits_to_samplefmt(bits):
         return PYAUDIO_BIT_MAPPING[bits]
 
 
+# Context enabled open so we don't forget to close the file handle
+# when hiding system stderr messages.
+class hide_stderr:
+    def __enter__(self):
+        self.fd = os.open('/dev/null', os.O_WRONLY)
+        self.std_err = os.dup(2)
+        os.dup2(self.fd, 2)
+        return self.fd
+
+    def __exit__(self, *args, **kwargs):
+        os.dup2(self.std_err, 2)
+        os.close(self.fd)
+        return True
+
+
 class PyAudioEnginePlugin(plugin.AudioEnginePlugin):
 
     def __init__(self, *args, **kwargs):
@@ -32,11 +47,8 @@ class PyAudioEnginePlugin(plugin.AudioEnginePlugin):
                           "that pop up during this process are normal and " +
                           "can usually be safely ignored.")
 
-        dev_null = os.open('/dev/null', os.O_WRONLY)
-        std_err = os.dup(2)
-        os.dup2(dev_null, 2)
-        self._pyaudio = pyaudio.PyAudio()
-        os.dup2(std_err, 2)
+        with hide_stderr():
+            self._pyaudio = pyaudio.PyAudio()
 
         self._logger.info("Initialization of PyAudio engine finished")
 
@@ -221,11 +233,11 @@ class PyAudioDevice(plugin.audioengine.AudioDevice):
 
     def play_fp(self, fp, *args, **kwargs):
         self._stop = False
-        if('chunksize' in kwargs):
+        if ('chunksize' in kwargs):
             chunksize = kwargs['chunksize']
         else:
             chunksize = int(profile.get(['audio', 'output_chunksize'], 1024))
-        if('add_padding' in kwargs):
+        if ('add_padding' in kwargs):
             add_padding = kwargs['add_padding']
         else:
             add_padding = profile.get(['audio', 'output_padding'], False)
@@ -238,7 +250,7 @@ class PyAudioDevice(plugin.audioengine.AudioDevice):
             data = w.readframes(chunksize)
             datalen = len(data)
             fmt = bits_to_samplefmt(bits)
-            if(self._output_stream is None):
+            if (self._output_stream is None):
                 self._output_stream = self._engine._pyaudio.open(
                     format=fmt,
                     channels=channels,
@@ -255,11 +267,15 @@ class PyAudioDevice(plugin.audioengine.AudioDevice):
                 self._output_channels = channels
             # Check to make sure that format, rate and channels match
             # the current stream. If not, close and reopen.
-            if(
+            # Note: This causes an error if the previous stream is not
+            # finished playing. The mostly causes problems when playing
+            # the "beep" noises which are recorded at a higher bitrate.
+            if (
                 (fmt != self._output_format)
-                or(rate != self._output_rate)
-                or(channels != self._output_channels)
+                or (rate != self._output_rate)
+                or (channels != self._output_channels)
             ):
+                self._output_stream.stop_stream()
                 self._output_stream.close()
                 self._output_stream = self._engine._pyaudio.open(
                     format=fmt,
@@ -273,48 +289,44 @@ class PyAudioDevice(plugin.audioengine.AudioDevice):
                 self._output_format = fmt
                 self._output_rate = rate
                 self._output_channels = channels
-            if(
+            if (
                 (add_padding)
                 and (datalen > 0)
                 and (datalen < (chunksize * samplewidth))
             ):
                 data += b'\00' * (chunksize * samplewidth - datalen)
                 datalen = len(data)
-            while(datalen > 0):
+            while (datalen > 0):
                 # Check to see if we need to stop
-                if(self._stop):
+                if (self._stop):
                     self._stop = False
                     break
                 # Redirect the "ALSA lib pcm.c:8545:(snd_pcm_recover) underrun
                 # occurred" errors to /dev/null
-                dev_null = os.open('/dev/null', os.O_WRONLY)
-                std_err = os.dup(2)
-                os.dup2(dev_null, 2)
-                try:
-                    self._output_stream.write(data)
-                except OSError:
-                    self._output_stream = self._engine._pyaudio.open(
-                        format=bits_to_samplefmt(bits),
-                        channels=channels,
-                        rate=rate,
-                        output=True,
-                        input=False,
-                        output_device_index=self.index,
-                        frames_per_buffer=chunksize
-                    )
-                    self._output_stream.write(data)
-                data = w.readframes(chunksize)
-                datalen = len(data)
-                if(
-                    (add_padding)
-                    and (datalen > 0)
-                    and (datalen < (chunksize * samplewidth))
-                ):
-                    data += b'\00' * (chunksize * samplewidth - datalen)
+                with hide_stderr():
+                    try:
+                        self._output_stream.write(data)
+                    except OSError:
+                        self._output_stream = self._engine._pyaudio.open(
+                            format=bits_to_samplefmt(bits),
+                            channels=channels,
+                            rate=rate,
+                            output=True,
+                            input=False,
+                            output_device_index=self.index,
+                            frames_per_buffer=chunksize
+                        )
+                        self._output_stream.write(data)
+                    data = w.readframes(chunksize)
                     datalen = len(data)
-            # Reset stderr
-            os.dup2(std_err, 2)
+                    if (
+                        (add_padding)
+                        and (datalen > 0)
+                        and (datalen < (chunksize * samplewidth))
+                    ):
+                        data += b'\00' * (chunksize * samplewidth - datalen)
+                        datalen = len(data)
             # pause before closing the stream (reduce clipping)
-            if(pause > 0):
+            if (pause > 0):
                 time.sleep(pause)
             self._stop = False
